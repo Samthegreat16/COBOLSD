@@ -64,7 +64,7 @@
        01  RE-ORDER-REPORT-OUT     PIC x(85).
        
        FD  ERROR-FILE.
-       01  ERROR-RECORD-OUT        PIC X(85).
+       01  ERROR-RECORD-OUT        PIC 9(9).
       *    TODO Figure out the size of this record
        
        
@@ -234,7 +234,7 @@
            WRITE INVENTORY-RECORD-V2 FROM INVENTORY-RECORD-IN.
            
        700-WRITE-TRANSACTION-ERROR.
-      *    TODO write this
+           WRITE ERROR-RECORD-OUT FROM INVENTORY-TRANSACTION-IN.
            
        200-PRODUCE-INVENTORY-REPORT.
       *    ==================================================
