@@ -184,8 +184,6 @@
            PERFORM 200-BATCH-UPDATE
                UNTIL EOF-FLAG-INV = "YES"
                    AND EOF-FLAG-TRANS = "YES".
-           PERFORM 200-PRODUCE-INVENTORY-REPORT
-               UNTIL EOF-FLAG-INV = "YES".
            PERFORM 200-TERMINATE-INVENTORY-REPORT.
            STOP RUN.
            
@@ -206,20 +204,26 @@
        200-BATCH-UPDATE.
            IF  TRANSACTION-PART-NUMBER-IN = PART-NUMBER-IN
                THEN PERFORM 700-MODIFY-INVENTORY-RECORD
+                    PERFORM 200-PRODUCE-INVENTORY-REPORT
                     PERFORM 700-READ-TRANSACTION-RECORD
+                    PERFORM 700-READ-INVENTORY-RECORD
            ELSE IF TRANSACTION-PART-NUMBER-IN > PART-NUMBER-IN
                THEN PERFORM 700-WRITE-INVENTORY-RECORD
+                    PERFORM 200-PRODUCE-INVENTORY-REPORT
                     PERFORM 700-READ-INVENTORY-RECORD
            ELSE IF TRANSACTION-PART-NUMBER-IN < PART-NUMBER-IN
                THEN PERFORM 700-WRITE-TRANSACTION-ERROR
                     PERFORM 700-READ-TRANSACTION-RECORD
            END-IF.
            
+           
        700-MODIFY-INVENTORY-RECORD.
            IF TRANSACTION-TYPE-IN = 1
                THEN ADD TRANSACTION-AMOUNT-IN TO QTY-RECEIVED-IN
            ELSE IF TRANSACTION-TYPE-IN = 2
                THEN ADD TRANSACTION-AMOUNT-IN TO AMT-SHIPPED-IN
+           ELSE
+               PERFORM 700-WRITE-TRANSACTION-ERROR
            END-IF.
            
            PERFORM 700-WRITE-INVENTORY-RECORD.
@@ -228,6 +232,7 @@
            WRITE INVENTORY-RECORD-V2 FROM INVENTORY-RECORD-IN.
            
        700-WRITE-TRANSACTION-ERROR.
+      *    TODO write this
            
        200-PRODUCE-INVENTORY-REPORT.
       *    ==================================================
@@ -243,7 +248,6 @@
            PERFORM 700-CHECK-RE-ORDER.
            PERFORM 700-PRINT-INVENTORY-DETAIL.
            PERFORM 700-CALCULATE-GRAND-TOTALS.
-           PERFORM 700-READ-INVENTORY-RECORD.
            
        200-TERMINATE-INVENTORY-REPORT.
       *    ==========================================================
@@ -284,8 +288,9 @@
                    NOT AT END ADD 1 TO CTR-RECORDS-IN-WS.
                    
        700-READ-TRANSACTION-RECORD.
-           READ INVENT-FILE-V2
-               AT END MOVE "YES" TO EOF-FLAG-TRANS.
+           IF EOF-FLAG-TRANS = "NO" THEN
+               READ INTENTORY-TRANSACTION-FILE
+                   AT END MOVE "YES" TO EOF-FLAG-TRANS.
                    
        700-PRINT-FILE-HEADER.
            ACCEPT DATE-WS FROM DATE.
