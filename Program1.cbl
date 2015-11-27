@@ -176,7 +176,6 @@
            PERFORM 200-ONLINE-UPDATE
                UNTIL READ-FLAG = "NO".
            PERFORM 200-TERMINATE-INVENTORY-REPORT.
-           PERFORM 700-CLOSE-INVENTORY-FILES.
            STOP RUN.
            
        200-INITIATE-INVENTORY-REPORT.
@@ -194,7 +193,6 @@
            PERFORM 700-PRINT-COLUMN-HEADER.
            
        200-INITITATE-ONLINE-UPDATE.
-           PERFORM 700-CLOSE-INVENTORY-FILES.
            DISPLAY "PRESS ENTER TO CONTINUE WITH MANUAL TRANSACTIONS".
            ACCEPT CONTINUE-FLAG.
            PERFORM 700-OPEN-INVENTORY-FILES.
@@ -269,6 +267,7 @@
       *    ==========================================================
            PERFORM 700-PRINT-TOTAL-VALUES.
            PERFORM 700-WRITE-AUDIT-TRAIL.
+           PERFORM 700-CLOSE-INVENTORY-FILES.
            
       *    =======================================================
       *    All of the level 700 modules are those that actually do
