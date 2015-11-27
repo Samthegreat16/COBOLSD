@@ -11,7 +11,10 @@
                    
            SELECT INVENT-FILE-V2
                ASSIGN TO "INVENT2BV2.DAT"
-                   ORGANIZATION IS LINE SEQUENTIAL.
+                   ORGANIZATION IS INDEXED
+                   ACCESS IS RANDOM
+                   RECORD KEY IS PART-NUMBER-V2
+                   FILE STATUS IS STATUS-FIELD.
                    
            SELECT INTENTORY-TRANSACTION-FILE
                ASSIGN TO "TRANSFIL.DAT"
@@ -55,7 +58,7 @@
        01  INVENTORY-TRANSACTION-IN.
            05  TRANSACTION-PART-NUMBER-IN  PIC 9(5).
            05  TRANSACTION-TYPE-IN         PIC 9(1).
-           05  TRANSACTION-AMOUNT-IN      PIC 9(3).
+           05  TRANSACTION-AMOUNT-IN       PIC 9(3).
            
        FD  INVENT-REPORT-OUT.
        01  INVENTORY-REPORT-OUT    PIC X(85).
@@ -65,8 +68,6 @@
        
        FD  ERROR-FILE.
        01  ERROR-RECORD-OUT        PIC 9(9).
-      *    TODO Figure out the size of this record
-       
        
        WORKING-STORAGE SECTION.
       *    =================================================
@@ -75,9 +76,9 @@
       *    the process, the record structure is moved to the
       *    output line (INVENTORY-REPORT-OUT) adn written
       *    =================================================
-      *
-      *
+      
        01  BLANK-LINE  PIC X(132)  VALUE SPACES.
+       01  STATUS-FIELD PIC X(2).
        
        01  INVENTORY-DETAIL-LINE.
            05  FILLER               PIC X(1)    VALUE   SPACES.
@@ -137,7 +138,8 @@
             
        01  FLAGS-AND-COUNTERS.
            05  EOF-FLAG-INV    PIC X(3)    VALUE "NO".
-           05  EOF-FLAG-TRANS    PIC X(3)    VALUE "NO".
+           05  EOF-FLAG-TRANS  PIC X(3)    VALUE "NO".
+           05  END-READ-FLAG   PIC X(3)    VALUE "YES".
            
        01  INVENTORY-HEADER-DATE.
            05  FILLER      PIC X(9)    VALUE SPACES.
@@ -173,6 +175,11 @@
            05  CTR-RECORDS-IN-WS   PIC 9(4)        VALUE ZERO.
            05  CTR-RECORDS-OUT-WS  PIC 9(4)        VALUE ZERO.
            05  INV-TOTAL-VALUE-WS  PIC 9(7)V99     VALUE ZERO.
+       
+       01  ONLINE-UPDATE-WS.
+           05  ONLINE-PART-NUM     PIC 9(5).
+           05  ONLINE-TANS-TYPE    PIC 9(1).
+           05  ONLINE-TRANS-AMOUNT PIC 9(3).
            
        PROCEDURE DIVISION.
        100-PRODUCE-INVENTORY-REPORT.
@@ -185,6 +192,8 @@
                UNTIL EOF-FLAG-INV = "YES"
                    AND EOF-FLAG-TRANS = "YES".
            PERFORM 200-TERMINATE-INVENTORY-REPORT.
+           PERFORM 200-ONLINE-TRANSACTION
+               UNTIL END-READ-FLAG = "NO".
            STOP RUN.
            
        200-INITIATE-INVENTORY-REPORT.
@@ -219,23 +228,30 @@
                     PERFORM 700-READ-INVENTORY-RECORD
            END-IF.
            
-           
-       700-MODIFY-INVENTORY-RECORD.
-           IF TRANSACTION-TYPE-IN = 1
-               THEN ADD TRANSACTION-AMOUNT-IN TO QTY-RECEIVED-IN
-           ELSE IF TRANSACTION-TYPE-IN = 2
-               THEN ADD TRANSACTION-AMOUNT-IN TO AMT-SHIPPED-IN
-           ELSE
-               PERFORM 700-WRITE-TRANSACTION-ERROR
-           END-IF.
-           
-           PERFORM 700-WRITE-INVENTORY-RECORD.
-           
-       700-WRITE-INVENTORY-RECORD.
-           WRITE INVENTORY-RECORD-V2 FROM INVENTORY-RECORD-IN.
-           
-       700-WRITE-TRANSACTION-ERROR.
-           WRITE ERROR-RECORD-OUT FROM INVENTORY-TRANSACTION-IN.
+       200-ONLINE-TRANSACTION.
+           DISPLAY 
+               "ANY ONLINE/DIRECT TRANSACTIONS TO PROCESS? (YES/NO): ".
+           ACCEPT END-READ-FLAG.
+           IF END-READ-FLAG = "YES" THEN
+               DISPLAY "ENTER PART NUMBER: "
+               ACCEPT ONLINE-PART-NUM
+               MOVE ONLINE-PART-NUM TO PART-NUMBER-V2
+               DISPLAY "ENTER TRANSACTION TYPE: "
+               ACCEPT ONLINE-TANS-TYPE
+               DISPLAY "ENTER TRANSACTION AMOUNT: "
+               ACCEPT ONLINE-TRANS-AMOUNT
+               
+               IF ONLINE-TANS-TYPE = "1" 
+                   THEN
+                   READ INVENT-FILE-V2
+                       KEY IS PART-NUMBER-V2
+                   END-READ
+                   ADD TRANSACTION-AMOUNT-IN TO QTY-RECEIVED-V2
+                   REWRITE INVENTORY-RECORD-V2
+                   END-REWRITE
+               
+               END-IF.
+               
            
        200-PRODUCE-INVENTORY-REPORT.
       *    ==================================================
@@ -276,7 +292,7 @@
        700-OPEN-INVENTORY-FILES.
            OPEN INPUT   INVENT-FILE-IN.
            OPEN INPUT   INTENTORY-TRANSACTION-FILE.
-           OPEN OUTPUT  INVENT-FILE-V2.
+           OPEN I-O     INVENT-FILE-V2.
            OPEN OUTPUT  INVENT-REPORT-OUT.
            OPEN OUTPUT  ERROR-FILE.
            OPEN OUTPUT  RO-REPORT-OUT.
@@ -317,6 +333,23 @@
            WRITE RE-ORDER-REPORT-OUT FROM BLANK-LINE.
            WRITE RE-ORDER-REPORT-OUT
                    FROM RE-ORDER-COLUMN-HEADER.
+                   
+       700-MODIFY-INVENTORY-RECORD.
+           IF TRANSACTION-TYPE-IN = 1
+               THEN ADD TRANSACTION-AMOUNT-IN TO QTY-RECEIVED-IN
+           ELSE IF TRANSACTION-TYPE-IN = 2
+               THEN ADD TRANSACTION-AMOUNT-IN TO AMT-SHIPPED-IN
+           ELSE
+               PERFORM 700-WRITE-TRANSACTION-ERROR
+           END-IF.
+           
+           PERFORM 700-WRITE-INVENTORY-RECORD.
+           
+       700-WRITE-INVENTORY-RECORD.
+           WRITE INVENTORY-RECORD-V2 FROM INVENTORY-RECORD-IN.
+           
+       700-WRITE-TRANSACTION-ERROR.
+           WRITE ERROR-RECORD-OUT FROM INVENTORY-TRANSACTION-IN.
                    
        700-PRINT-RE-ORDER-REPORT.
            MOVE    PART-NUMBER-IN
