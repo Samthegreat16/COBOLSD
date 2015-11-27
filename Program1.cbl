@@ -51,11 +51,7 @@
            05  UNIT-PRICE-V2       PIC 9(4)V99.
            05  RE-ORDER-POINT-V2   PIC 9(3).
            
-       FD  INTENTORY-TRANSACTION-FILE.
-       01  INVENTORY-TRANSACTION-IN.
-           05  TRANSACTION-PART-NUMBER-IN  PIC 9(5).
-           05  TRANSACTION-TYPE-IN         PIC 9(1).
-           05  TRANSACTION-AMOUNT-IN      PIC 9(3).
+       COPY TRANSFILE_FD.
            
        FD  INVENT-REPORT-OUT.
        01  INVENTORY-REPORT-OUT    PIC X(85).
@@ -78,6 +74,8 @@
       *
       *
        01  BLANK-LINE  PIC X(132)  VALUE SPACES.
+       
+       COPY RE-ORDER-REPORT-WS.
        
        01  INVENTORY-DETAIL-LINE.
            05  FILLER               PIC X(1)    VALUE   SPACES.
@@ -115,22 +113,6 @@
            05  FILLER      PIC X(6).
            05  FILLER      PIC X(5)    VALUE   "VALUE".
            
-       01  RE-ORDER-DETAIL-LINE.
-           05  FILLER                  PIC X(1)    VALUE   SPACES.
-           05  PART-NUMBER-OUT-RO      PIC X(5).
-           05  FILLER                  PIC X(3)    VALUE  SPACES.
-           05  PART-NAME-OUT-RO        PIC X(20).
-           05  FILLER                  PIC X(3)    VALUE SPACES.
-           05  PART-CURRENT-STOCK-RO   PIC ZZZ9.
-           
-       01 RE-ORDER-COLUMN-HEADER.
-           05  FILLER      PIC X(1).
-           05  FILLER      PIC X(7)    VALUE   "PART NO".
-           05  FILLER      PIC X(1).
-           05  FILLER      PIC X(9)    VALUE   "PART NAME".
-           05  FILLER      PIC X(14).
-           05  FILLER      PIC X(13)   VALUE   "CURRENT STOCK".
-       
        01 DATE-WS.
            05 YR pic 99.
            05 MNTH pic 99.
@@ -146,10 +128,6 @@
            05  MONTH       PIC 99      VALUE ZERO.
            05  FILLER      PIC X(1)    VALUE SPACES.
            05  YEAR        PIC 99      VALUE ZERO.
-           
-       01  RE-ORDER-HEADER.
-           05  FILLER      PIC X(9)    VALUE SPACES.
-           05  FILLER      PIC X(20)   VALUE "RE ORDER REPORT for".
            
        01  INVENTORY-SUMMARY.
            05  FILLER      PIC X(2)    VALUE SPACES.
@@ -218,24 +196,6 @@
                     PERFORM 700-READ-TRANSACTION-RECORD
                     PERFORM 700-READ-INVENTORY-RECORD
            END-IF.
-           
-           
-       700-MODIFY-INVENTORY-RECORD.
-           IF TRANSACTION-TYPE-IN = 1
-               THEN ADD TRANSACTION-AMOUNT-IN TO QTY-RECEIVED-IN
-           ELSE IF TRANSACTION-TYPE-IN = 2
-               THEN ADD TRANSACTION-AMOUNT-IN TO AMT-SHIPPED-IN
-           ELSE
-               PERFORM 700-WRITE-TRANSACTION-ERROR
-           END-IF.
-           
-           PERFORM 700-WRITE-INVENTORY-RECORD.
-           
-       700-WRITE-INVENTORY-RECORD.
-           WRITE INVENTORY-RECORD-V2 FROM INVENTORY-RECORD-IN.
-           
-       700-WRITE-TRANSACTION-ERROR.
-           WRITE ERROR-RECORD-OUT FROM INVENTORY-TRANSACTION-IN.
            
        200-PRODUCE-INVENTORY-REPORT.
       *    ==================================================
@@ -317,6 +277,23 @@
            WRITE RE-ORDER-REPORT-OUT FROM BLANK-LINE.
            WRITE RE-ORDER-REPORT-OUT
                    FROM RE-ORDER-COLUMN-HEADER.
+                   
+       700-MODIFY-INVENTORY-RECORD.
+           IF TRANSACTION-TYPE-IN = 1
+               THEN ADD TRANSACTION-AMOUNT-IN TO QTY-RECEIVED-IN
+           ELSE IF TRANSACTION-TYPE-IN = 2
+               THEN ADD TRANSACTION-AMOUNT-IN TO AMT-SHIPPED-IN
+           ELSE
+               PERFORM 700-WRITE-TRANSACTION-ERROR
+           END-IF.
+           
+           PERFORM 700-WRITE-INVENTORY-RECORD.
+           
+       700-WRITE-INVENTORY-RECORD.
+           WRITE INVENTORY-RECORD-V2 FROM INVENTORY-RECORD-IN.
+           
+       700-WRITE-TRANSACTION-ERROR.
+           WRITE ERROR-RECORD-OUT FROM INVENTORY-TRANSACTION-IN.
                    
        700-PRINT-RE-ORDER-REPORT.
            MOVE    PART-NUMBER-IN
