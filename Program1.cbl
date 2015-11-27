@@ -364,5 +364,8 @@
                
        700-CLOSE-INVENTORY-FILES.
            CLOSE INVENT-FILE-IN
+                 INTENTORY-TRANSACTION-FILE
+                 INVENT-FILE-V2
+                 ERROR-FILE
                  INVENT-REPORT-OUT
                  RO-REPORT-OUT.
