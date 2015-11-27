@@ -12,7 +12,7 @@
            SELECT INVENT-FILE-V2
                ASSIGN TO "INVENT2BV2.DAT"
                    ORGANIZATION IS INDEXED
-                   ACCESS MODE IS RANDOM
+                   ACCESS MODE IS SEQUENTIAL
                    RECORD KEY IS PART-NUMBER-V2
                    FILE STATUS IS STATUS-FIELD.
                    
@@ -122,7 +122,8 @@
        01  FLAGS-AND-COUNTERS.
            05  EOF-FLAG-INV    PIC X(3)    VALUE "NO".
            05  EOF-FLAG-TRANS  PIC X(3)    VALUE "NO".
-           05  END-READ-FLAG   PIC X(3)    VALUE "YES".
+           05  READ-FLAG       PIC X(3)    VALUE "YES".
+           05  CONTINUE-FLAG   PIC X(3).
            
        01  INVENTORY-HEADER-DATE.
            05  FILLER      PIC X(9)    VALUE SPACES.
@@ -171,8 +172,10 @@
                UNTIL EOF-FLAG-INV = "YES"
                    AND EOF-FLAG-TRANS = "YES".
            PERFORM 200-TERMINATE-INVENTORY-REPORT.
+           PERFORM 200-INITITATE-ONLINE-UPDATE.
            PERFORM 200-ONLINE-UPDATE
-               UNTIL END-READ-FLAG = "NO".
+               UNTIL READ-FLAG = "NO"
+                   AND EOF-FLAG-INV = "YES".
            PERFORM 200-TERMINATE-INVENTORY-REPORT.
            PERFORM 700-CLOSE-INVENTORY-FILES.
            STOP RUN.
@@ -188,6 +191,17 @@
            PERFORM 700-INITIALIZE-COUNTERS.
            PERFORM 700-READ-INVENTORY-RECORD.
            PERFORM 700-READ-TRANSACTION-RECORD.    
+           PERFORM 700-PRINT-FILE-HEADER.
+           PERFORM 700-PRINT-COLUMN-HEADER.
+           
+       200-INITITATE-ONLINE-UPDATE.
+           PERFORM 700-CLOSE-INVENTORY-FILES.
+           DISPLAY "PRESS ENTER TO CONTINUE WITH MANUAL TRANSACTIONS".
+           ACCEPT CONTINUE-FLAG.
+           PERFORM 700-OPEN-INVENTORY-FILES.
+           PERFORM 700-INITIALIZE-COUNTERS.
+           PERFORM 700-INITIALIZE-FLAGS.
+           PERFORM 700-READ-INVENTORY-RECORD-V2.
            PERFORM 700-PRINT-FILE-HEADER.
            PERFORM 700-PRINT-COLUMN-HEADER.
            
@@ -212,8 +226,8 @@
        200-ONLINE-UPDATE.
            DISPLAY 
                "ANY ONLINE/DIRECT TRANSACTIONS TO PROCESS? (YES/NO): ".
-           ACCEPT END-READ-FLAG.
-           IF END-READ-FLAG = "YES" THEN
+           ACCEPT READ-FLAG.
+           IF READ-FLAG = "YES" THEN
                DISPLAY "ENTER PART NUMBER: "
                ACCEPT ONLINE-PART-NUM
                MOVE ONLINE-PART-NUM TO PART-NUMBER-V2
@@ -222,7 +236,8 @@
                DISPLAY "ENTER TRANSACTION AMOUNT: "
                ACCEPT ONLINE-TRANS-AMOUNT
                
-               READ INVENT-FILE-V2 KEY IS PART-NUMBER-V2.
+      *         READ INVENT-FILE-V2 KEY IS PART-NUMBER-V2
+               PERFORM 700-READ-INVENTORY-RECORD-V2.
                
                IF ONLINE-TRANS-TYPE = "1"
                    THEN ADD ONLINE-TRANS-AMOUNT TO QTY-RECEIVED-V2
@@ -233,6 +248,13 @@
                END-IF.
                
                REWRITE INVENTORY-RECORD-V2.
+               
+           IF READ-FLAG = "NO" 
+               THEN PERFORM 700-READ-INVENTORY-RECORD-V2
+                    MOVE INVENTORY-RECORD-V2 TO INVENTORY-RECORD-IN
+                    PERFORM 200-PRODUCE-INVENTORY-REPORT
+           END-IF.
+               
 
        200-PRODUCE-INVENTORY-REPORT.
       *    ==================================================
@@ -281,13 +303,22 @@
        700-INITIALIZE-COUNTERS.
            INITIALIZE  CTR-RECORDS-IN-WS
                        CTR-RECORDS-OUT-WS.
-                        
+                       
+       700-INITIALIZE-FLAGS.
+           MOVE "NO" TO EOF-FLAG-INV.
+   
        700-READ-INVENTORY-RECORD.
            IF EOF-FLAG-INV = "NO" THEN
                READ INVENT-FILE-IN
                    AT END MOVE "YES" TO EOF-FLAG-INV
                        NOT AT END ADD 1 TO CTR-RECORDS-IN-WS.
-                   
+                       
+       700-READ-INVENTORY-RECORD-V2.
+           IF EOF-FLAG-INV = "NO" THEN
+               READ INVENT-FILE-V2
+                   AT END MOVE "YES" TO EOF-FLAG-INV
+                       NOT AT END ADD 1 TO CTR-RECORDS-IN-WS.
+
        700-READ-TRANSACTION-RECORD.
            IF EOF-FLAG-TRANS = "NO" THEN
                READ INTENTORY-TRANSACTION-FILE
