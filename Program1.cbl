@@ -191,9 +191,10 @@
            PERFORM 200-BATCH-UPDATE
                UNTIL EOF-FLAG-INV = "YES"
                    AND EOF-FLAG-TRANS = "YES".
-           PERFORM 200-TERMINATE-INVENTORY-REPORT.
+           PERFORM 200-WRITE-REPORTS.
            PERFORM 200-ONLINE-TRANSACTION
                UNTIL END-READ-FLAG = "NO".
+           PERFORM 200-TERMINATE-INVENTORY-REPORT.
            STOP RUN.
            
        200-INITIATE-INVENTORY-REPORT.
@@ -245,10 +246,8 @@
                    THEN
                    READ INVENT-FILE-V2
                        KEY IS PART-NUMBER-V2
-                   END-READ
-                   ADD TRANSACTION-AMOUNT-IN TO QTY-RECEIVED-V2
+                   ADD ONLINE-TRANS-AMOUNT TO QTY-RECEIVED-V2
                    REWRITE INVENTORY-RECORD-V2
-                   END-REWRITE
                
                END-IF.
                
@@ -268,14 +267,16 @@
            PERFORM 700-PRINT-INVENTORY-DETAIL.
            PERFORM 700-CALCULATE-GRAND-TOTALS.
            
+       200-WRITE-REPORTS.
+           PERFORM 700-PRINT-TOTAL-VALUES.
+           PERFORM 700-WRITE-AUDIT-TRAIL.
+           
        200-TERMINATE-INVENTORY-REPORT.
       *    ==========================================================
       *    The termination module carries out those function to be
       *    performed once all records have been processed. Control of
       *    the execution of this module is at the high level module.
       *    ==========================================================
-           PERFORM 700-PRINT-TOTAL-VALUES.
-           PERFORM 700-WRITE-AUDIT-TRAIL.
            PERFORM 700-CLOSE-INVENTORY-FILES.
            
       *    =======================================================
