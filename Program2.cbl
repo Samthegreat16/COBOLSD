@@ -14,7 +14,11 @@
        
        PROCEDURE DIVISION USING QTY-ON-HAND-IN, QTY-RECEIVED-IN,
            CURRENT-WS, AMT-SHIPPED-IN, UNIT-PRICE-IN, UNIT-VALUE-WS.
-
+           
+       PERFORM 700-CALCULATE-INVENTORY-VALUE.
+       EXIT PROGRAM.
+       
+       700-CALCULATE-INVENTORY-VALUE.
            ADD QTY-ON-HAND-IN
                QTY-RECEIVED-IN
                    GIVING CURRENT-WS.
@@ -24,4 +28,4 @@
                BY UNIT-PRICE-IN
                    GIVING  UNIT-VALUE-WS.
                    
-          EXIT PROGRAM.
+          

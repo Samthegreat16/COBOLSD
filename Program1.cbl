@@ -11,7 +11,10 @@
                    
            SELECT INVENT-FILE-V2
                ASSIGN TO "INVENT2BV2.DAT"
-                   ORGANIZATION IS LINE SEQUENTIAL.
+                   ORGANIZATION IS INDEXED
+                   ACCESS MODE IS RANDOM
+                   RECORD KEY IS PART-NUMBER-V2
+                   FILE STATUS IS STATUS-FIELD.
                    
            SELECT INTENTORY-TRANSACTION-FILE
                ASSIGN TO "TRANSFIL.DAT"
@@ -61,8 +64,6 @@
        
        FD  ERROR-FILE.
        01  ERROR-RECORD-OUT        PIC 9(9).
-      *    TODO Figure out the size of this record
-       
        
        WORKING-STORAGE SECTION.
       *    =================================================
@@ -73,7 +74,8 @@
       *    =================================================
       *
       *
-       01  BLANK-LINE  PIC X(132)  VALUE SPACES.
+       01  BLANK-LINE      PIC X(132)  VALUE SPACES.
+       01  STATUS-FIELD    PIC X(2).
        
        COPY RE-ORDER-REPORT-WS.
        
@@ -119,7 +121,8 @@
             
        01  FLAGS-AND-COUNTERS.
            05  EOF-FLAG-INV    PIC X(3)    VALUE "NO".
-           05  EOF-FLAG-TRANS    PIC X(3)    VALUE "NO".
+           05  EOF-FLAG-TRANS  PIC X(3)    VALUE "NO".
+           05  END-READ-FLAG   PIC X(3)    VALUE "YES".
            
        01  INVENTORY-HEADER-DATE.
            05  FILLER      PIC X(9)    VALUE SPACES.
@@ -151,6 +154,11 @@
            05  CTR-RECORDS-IN-WS   PIC 9(4)        VALUE ZERO.
            05  CTR-RECORDS-OUT-WS  PIC 9(4)        VALUE ZERO.
            05  INV-TOTAL-VALUE-WS  PIC 9(7)V99     VALUE ZERO.
+          
+       01  ONLINE-UPDATE-WS.
+           05  ONLINE-PART-NUM     PIC 9(5).
+           05  ONLINE-TRANS-TYPE   PIC 9(1).
+           05  ONLINE-TRANS-AMOUNT PIC 9(3).
            
        PROCEDURE DIVISION.
        100-PRODUCE-INVENTORY-REPORT.
@@ -163,6 +171,10 @@
                UNTIL EOF-FLAG-INV = "YES"
                    AND EOF-FLAG-TRANS = "YES".
            PERFORM 200-TERMINATE-INVENTORY-REPORT.
+           PERFORM 200-ONLINE-UPDATE
+               UNTIL END-READ-FLAG = "NO".
+           PERFORM 200-TERMINATE-INVENTORY-REPORT.
+           PERFORM 700-CLOSE-INVENTORY-FILES.
            STOP RUN.
            
        200-INITIATE-INVENTORY-REPORT.
@@ -196,7 +208,32 @@
                     PERFORM 700-READ-TRANSACTION-RECORD
                     PERFORM 700-READ-INVENTORY-RECORD
            END-IF.
-           
+       
+       200-ONLINE-UPDATE.
+           DISPLAY 
+               "ANY ONLINE/DIRECT TRANSACTIONS TO PROCESS? (YES/NO): ".
+           ACCEPT END-READ-FLAG.
+           IF END-READ-FLAG = "YES" THEN
+               DISPLAY "ENTER PART NUMBER: "
+               ACCEPT ONLINE-PART-NUM
+               MOVE ONLINE-PART-NUM TO PART-NUMBER-V2
+               DISPLAY "ENTER TRANSACTION TYPE: "
+               ACCEPT ONLINE-TRANS-TYPE
+               DISPLAY "ENTER TRANSACTION AMOUNT: "
+               ACCEPT ONLINE-TRANS-AMOUNT
+               
+               READ INVENT-FILE-V2 KEY IS PART-NUMBER-V2.
+               
+               IF ONLINE-TRANS-TYPE = "1"
+                   THEN ADD ONLINE-TRANS-AMOUNT TO QTY-RECEIVED-V2
+               ELSE IF ONLINE-TRANS-TYPE = "2"
+                   THEN ADD ONLINE-TRANS-AMOUNT TO AMT-SHIPPED-V2
+               ELSE
+                   PERFORM 700-WRITE-TRANSACTION-ERROR
+               END-IF.
+               
+               REWRITE INVENTORY-RECORD-V2.
+
        200-PRODUCE-INVENTORY-REPORT.
       *    ==================================================
       *    This is the mainline process which is repeated for
@@ -209,7 +246,6 @@
       *    ==================================================
            CALL    "Program2" USING QTY-ON-HAND-IN, QTY-RECEIVED-IN,
                CURRENT-WS, AMT-SHIPPED-IN, UNIT-PRICE-IN, UNIT-VALUE-WS.
-           PERFORM 700-CALCULATE-INVENTORY-VALUE.
            PERFORM 700-CHECK-RE-ORDER.
            PERFORM 700-PRINT-INVENTORY-DETAIL.
            PERFORM 700-CALCULATE-GRAND-TOTALS.
@@ -222,7 +258,6 @@
       *    ==========================================================
            PERFORM 700-PRINT-TOTAL-VALUES.
            PERFORM 700-WRITE-AUDIT-TRAIL.
-           PERFORM 700-CLOSE-INVENTORY-FILES.
            
       *    =======================================================
       *    All of the level 700 modules are those that actually do
@@ -236,21 +271,22 @@
       *    be easily located if changes are required.
       *    =======================================================
        700-OPEN-INVENTORY-FILES.
-           OPEN INPUT   INVENT-FILE-IN.
-           OPEN INPUT   INTENTORY-TRANSACTION-FILE.
-           OPEN OUTPUT  INVENT-FILE-V2.
-           OPEN OUTPUT  INVENT-REPORT-OUT.
-           OPEN OUTPUT  ERROR-FILE.
-           OPEN OUTPUT  RO-REPORT-OUT.
+           OPEN INPUT  INVENT-FILE-IN.
+           OPEN INPUT  INTENTORY-TRANSACTION-FILE.
+           OPEN I-O INVENT-FILE-V2.
+           OPEN OUTPUT INVENT-REPORT-OUT.
+           OPEN OUTPUT ERROR-FILE.
+           OPEN OUTPUT RO-REPORT-OUT.
                    
        700-INITIALIZE-COUNTERS.
            INITIALIZE  CTR-RECORDS-IN-WS
                        CTR-RECORDS-OUT-WS.
                         
        700-READ-INVENTORY-RECORD.
-           READ INVENT-FILE-IN
-               AT END MOVE "YES" TO EOF-FLAG-INV
-                   NOT AT END ADD 1 TO CTR-RECORDS-IN-WS.
+           IF EOF-FLAG-INV = "NO" THEN
+               READ INVENT-FILE-IN
+                   AT END MOVE "YES" TO EOF-FLAG-INV
+                       NOT AT END ADD 1 TO CTR-RECORDS-IN-WS.
                    
        700-READ-TRANSACTION-RECORD.
            IF EOF-FLAG-TRANS = "NO" THEN
@@ -327,16 +363,6 @@
            WRITE INVENTORY-REPORT-OUT
                   FROM  INVENTORY-DETAIL-LINE.
            ADD 1 TO CTR-RECORDS-OUT-WS.
-       
-       700-CALCULATE-INVENTORY-VALUE.
-           ADD QTY-ON-HAND-IN
-               QTY-RECEIVED-IN
-                   GIVING CURRENT-WS.
-           SUBTRACT AMT-SHIPPED-IN
-               FROM  CURRENT-WS.
-           MULTIPLY CURRENT-WS
-               BY UNIT-PRICE-IN
-                   GIVING  UNIT-VALUE-WS.
                    
        700-CHECK-RE-ORDER.
            IF CURRENT-WS <= RE-ORDER-POINT-IN THEN
@@ -370,4 +396,4 @@
                  INVENT-FILE-V2
                  ERROR-FILE
                  INVENT-REPORT-OUT
-                 RO-REPORT-OUT.
+                 RO-REPORT-OUT.        

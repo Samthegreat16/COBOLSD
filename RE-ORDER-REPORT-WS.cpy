@@ -16,5 +16,5 @@
            
        01  RE-ORDER-HEADER.
            05  FILLER      PIC X(9)    VALUE SPACES.
-           05  FILLER      PIC X(20)   VALUE "RE ORDER REPORT for".
+           05  FILLER      PIC X(20)   VALUE "RE ORDER REPORT".
        
