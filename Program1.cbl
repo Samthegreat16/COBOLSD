@@ -207,6 +207,8 @@
       *    the mainline in the upper higher level control
       *    module
       *    ==================================================
+           CALL    "Program2" USING QTY-ON-HAND-IN, QTY-RECEIVED-IN,
+               CURRENT-WS, AMT-SHIPPED-IN, UNIT-PRICE-IN, UNIT-VALUE-WS.
            PERFORM 700-CALCULATE-INVENTORY-VALUE.
            PERFORM 700-CHECK-RE-ORDER.
            PERFORM 700-PRINT-INVENTORY-DETAIL.
@@ -325,7 +327,7 @@
            WRITE INVENTORY-REPORT-OUT
                   FROM  INVENTORY-DETAIL-LINE.
            ADD 1 TO CTR-RECORDS-OUT-WS.
-           
+       
        700-CALCULATE-INVENTORY-VALUE.
            ADD QTY-ON-HAND-IN
                QTY-RECEIVED-IN
